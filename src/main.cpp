@@ -1,4 +1,5 @@
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 
 #define DIGIT PORTD
@@ -20,7 +21,7 @@ uint16_t custom_pow(uint16_t num, int8_t deg) {
   return acc;
 }
 
-void divideNumberOnDigits(uint16_t number) {
+void displayOnIndicator(uint16_t number) {
   int8_t j, k;
 
   for (j = 3, k = 0; j >= 0; j--, k++) {
@@ -29,6 +30,18 @@ void divideNumberOnDigits(uint16_t number) {
     separateDigits[k] = number / divider;
     number %= divider;
   }
+}
+
+uint8_t counter = 0;
+
+ISR(TIMER0_OVF_vect) {
+  if (counter > 3) counter = 0;
+
+  CATEGORY &= 0xF0;
+  CATEGORY |= (1<<counter);
+  DIGIT = digits[separateDigits[counter]];
+
+  counter++;
 }
 
 void setup() {
@@ -40,18 +53,22 @@ void setup() {
 
   DDRC = 0xFF;
   PORTC = 0x00;
+
+  // F/8
+  TCCR0 &= ~((1<<CS00) | (1<<CS02));
+  TCCR0 |= (1<<CS01);
+  // enable an interrupt by the TC0 overflow
+  TIMSK |= (1<<0);
+  TCNT0 = 0;
+  SREG |= (1<<7);
 }
 
+int16_t clock = 0;
+
 void loop() {
-  divideNumberOnDigits(876);
+  displayOnIndicator(clock++);
 
-  for (uint8_t i = 0; i < 4; i++) {
-    CATEGORY &= 0xF0;
-    CATEGORY |= (1<<i);
-    DIGIT = digits[separateDigits[i]];
-
-    _delay_ms(3);
-  }
+  _delay_ms(1000);
 }
 
 int main(void) {
