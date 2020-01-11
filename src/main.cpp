@@ -44,6 +44,8 @@ ISR(TIMER0_OVF_vect) {
   counter++;
 }
 
+int16_t clock = 0;
+
 void setup() {
   DDRD = 0xFF;
   DIGIT = 0x00;
@@ -51,8 +53,8 @@ void setup() {
   DDRB |= 0x0F;
   CATEGORY &= ~(0x0F);
 
-  DDRC = 0xFF;
-  PORTC = 0x00;
+  DDRC = 0x00;
+  PORTC |= (1<<0) | (1<<1);
 
   // F/8
   TCCR0 &= ~((1<<CS00) | (1<<CS02));
@@ -61,14 +63,34 @@ void setup() {
   TIMSK |= (1<<0);
   TCNT0 = 0;
   SREG |= (1<<7);
+
+  displayOnIndicator(clock);
 }
 
-int16_t clock = 0;
-
 void loop() {
-  displayOnIndicator(clock++);
+  if (~PINC & (1<<0)) {
+    if (clock == 9999) {
+      clock = 0;
+    } else {
+      clock++;
+    }
 
-  _delay_ms(1000);
+    displayOnIndicator(clock);
+
+    _delay_ms(300);
+  }
+
+  if (~PINC & (1<<1)) {
+    if (clock == 0) {
+      clock = 9999;
+    } else {
+      clock--;
+    }
+
+    displayOnIndicator(clock);
+
+    _delay_ms(300);
+  }
 }
 
 int main(void) {
