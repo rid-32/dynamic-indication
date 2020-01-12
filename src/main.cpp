@@ -11,6 +11,9 @@ const uint8_t digits[10] = {
 
 uint8_t separateDigits[4] = {0, 0, 0, 0};
 
+uint8_t category = 0;
+int16_t clock = 0;
+
 uint16_t custom_pow(uint16_t num, int8_t deg) {
   uint16_t acc = 1;
 
@@ -32,19 +35,40 @@ void displayOnIndicator(uint16_t number) {
   }
 }
 
-uint8_t counter = 0;
-
 ISR(TIMER0_OVF_vect) {
-  if (counter > 3) counter = 0;
+  if (category > 3) category = 0;
 
   CATEGORY &= 0xF0;
-  CATEGORY |= (1<<counter);
-  DIGIT = digits[separateDigits[counter]];
+  CATEGORY |= (1<<category);
+  DIGIT = digits[separateDigits[category]];
 
-  counter++;
+  category++;
 }
 
-int16_t clock = 0;
+ISR(TIMER1_COMPA_vect) {
+  clock--;
+
+  if (clock < 0) clock = 0;
+  if (clock == 0) {
+    PORTC |= (1<<3);
+  } else {
+    PORTC &= ~(1<<3);
+  }
+}
+
+void startTimer(void) {
+  // F/64 = 15625Hz
+  TCCR1B |= (1<<CS10) | (1<<CS11);
+  TCCR1B &= ~(1<<CS12);
+
+  TIMSK |= (1<<OCIE1A); // enable interrupt for TC1 by compare
+  // write 15625 tacts to the compare register
+  OCR1AH = 0x3D;
+  OCR1AL = 0x09;
+
+  TCNT1 = 0;
+  TCCR1B |= (1<<WGM12); // set up CTC1 (reset by match)
+}
 
 void setup() {
   DDRD = 0xFF;
@@ -53,8 +77,10 @@ void setup() {
   DDRB |= 0x0F;
   CATEGORY &= ~(0x0F);
 
-  DDRC = 0x00;
-  PORTC |= (1<<0) | (1<<1);
+  DDRC &= ~((1<<0) | (1<<1) | (1<<2));
+  DDRC |= (1<<3);
+  PORTC |= (1<<0) | (1<<1) | (1<<2);
+  PORTC &= ~(1<<3);
 
   // F/8
   TCCR0 &= ~((1<<CS00) | (1<<CS02));
@@ -63,33 +89,33 @@ void setup() {
   TIMSK |= (1<<0);
   TCNT0 = 0;
   SREG |= (1<<7);
-
-  displayOnIndicator(clock);
 }
 
 void loop() {
-  if (~PINC & (1<<0)) {
-    if (clock == 9999) {
-      clock = 0;
-    } else {
+  displayOnIndicator(clock);
+
+  if (~PINC & (1<<1)) {
+    if (clock != 9999) {
       clock++;
     }
 
-    displayOnIndicator(clock);
-
-    _delay_ms(300);
+    _delay_ms(200);
   }
 
-  if (~PINC & (1<<1)) {
-    if (clock == 0) {
-      clock = 9999;
-    } else {
+  if (~PINC & (1<<0)) {
+    if (clock != 0) {
       clock--;
     }
 
-    displayOnIndicator(clock);
+    _delay_ms(200);
+  }
 
-    _delay_ms(300);
+  if (~PINC & (1<<2)) {
+    if (clock > 0) {
+      startTimer();
+    }
+
+    _delay_ms(200);
   }
 }
 
